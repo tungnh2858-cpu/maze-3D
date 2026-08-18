@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D AI & Custom Maze Game</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            background-color: #020617;
+            overflow: hidden;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        canvas {
+            display: block;
+            outline: none;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #6366f1;
+            border-radius: 3px;
+        }
+        /* Pulsating Neon Glow */
+        .neon-border {
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.4), inset 0 0 15px rgba(99, 102, 241, 0.2);
+        }
+        /* Glassmorphism Panel */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen relative overflow-hidden select-none">
+
+    <!-- Damage Red Vignette Screen -->
+    <div id="damage-overlay" class="absolute inset-0 z-20 bg-rose-900/40 opacity-0 border-[16px] border-rose-600 pointer-events-none transition-opacity duration-150"></div>
+
+    <!-- 3D Render Canvas Container -->
+    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+
+    <!-- HUD Overlay - Top Bar -->
+    <div class="absolute top-0 left-0 right-0 z-10 p-2 md:p-4 flex justify-between items-center pointer-events-none gap-2 flex-wrap">
+        <!-- Game Title & Stats -->
+        <div class="glass-panel px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center space-x-3 pointer-events-auto shadow-lg border-indigo-500/30">
+            <div>
+                <h1 class="text-xs md:text-base font-orbitron font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400">
+                    3D MAZE AI
+                </h1>
+                <div class="text-[10px] text-slate-300 flex items-center space-x-2 font-semibold">
+                    <span id="map-size-label"><i class="fa-solid fa-border-all mr-1 text-indigo-400"></i>25x25</span>
+                    <span>•</span>
+                    <span id="player-hp-label" class="text-emerald-400"><i class="fa-solid fa-heart mr-1"></i>100 HP</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Controls Bar -->
+        <div class="flex items-center space-x-1.5 md:space-x-2 pointer-events-auto">
+            <!-- Camera Toggle -->
+            <button id="btn-camera" title="Đổi góc nhìn (FPS / Overhead)" class="h-9 px-2.5 md:h-10 md:px-3 glass-panel hover:bg-slate-800/80 rounded-xl flex items-center justify-center text-indigo-400 border-indigo-500/30 hover:border-indigo-400 transition-all active:scale-95 shadow-md text-xs font-bold gap-1.5">
+                <i class="fa-solid fa-eye text-sm"></i>
+                <span class="hidden sm:inline">Góc nhìn</span>
+            </button>
+
+            <!-- Radar Mode Toggle -->
+            <button id="btn-radar-toggle" title="Chuyển đổi Radar (Ẩn / Tròn / Bản đồ)" class="h-9 px-2.5 md:h-10 md:px-3 glass-panel hover:bg-slate-800/80 rounded-xl flex items-center justify-center text-emerald-400 border-emerald-500/30 hover:border-emerald-400 transition-all active:scale-95 shadow-md text-xs font-bold gap-1.5">
+                <i id="radar-icon" class="fa-solid fa-map text-sm"></i>
+                <span class="hidden sm:inline">Radar</span>
+            </button>
+
+            <!-- AI Solve Hint -->
+            <button id="btn-ai-solve" title="AI Chỉ đường" class="h-9 px-2.5 md:h-10 md:px-3 glass-panel hover:bg-slate-800/80 rounded-xl flex items-center justify-center text-amber-400 border-amber-500/30 hover:border-amber-400 transition-all active:scale-95 shadow-md text-xs font-bold gap-1.5">
+                <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+                <span class="hidden sm:inline">AI Gợi ý</span>
+            </button>
+
+            <!-- Custom Editor -->
+            <button id="btn-open-editor" title="Tự vẽ bản đồ" class="h-9 px-2.5 md:h-10 md:px-3 glass-panel bg-cyan-950/40 hover:bg-cyan-900/60 rounded-xl flex items-center justify-center text-cyan-300 border-cyan-500/50 hover:border-cyan-300 transition-all active:scale-95 shadow-md text-xs font-bold gap-1.5">
+                <i class="fa-solid fa-pen-ruler text-sm"></i>
+                <span>Vẽ Map</span>
+            </button>
+
+            <!-- Settings -->
+            <button id="btn-open-settings" title="Cài đặt" class="w-9 h-9 md:w-10 md:h-10 glass-panel hover:bg-slate-800/80 rounded-xl flex items-center justify-center text-slate-300 border-slate-700 hover:border-slate-500 transition-all active:scale-95 shadow-md">
+                <i class="fa-solid fa-gear text-sm md:text-base"></i>
+            </button>
+
+            <!-- Fullscreen -->
+            <button id="btn-fullscreen" title="Toàn màn hình" class="w-9 h-9 md:w-10 md:h-10 glass-panel hover:bg-slate-800/80 rounded-xl flex items-center justify-center text-purple-400 border-purple-500/30 hover:border-purple-400 transition-all active:scale-95 shadow-md">
+                <i class="fa-solid fa-expand text-sm md:text-base"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Minimap Radar Container -->
+    <div id="radar-container" class="absolute bottom-4 right-4 z-10 pointer-events-none hidden">
+        <div class="glass-panel p-2 rounded-2xl border-indigo-500/30 shadow-2xl relative">
+            <canvas id="minimap-canvas" width="140" height="140" class="rounded-xl border border-indigo-500/20"></canvas>
+            <div id="radar-mode-label" class="absolute bottom-3 left-0 right-0 text-center text-[9px] font-orbitron font-bold text-indigo-300 uppercase tracking-wider pointer-events-none">
+                Radar
+            </div>
+        </div>
+    </div>
+
+    <!-- Pointer Lock Hint for PC Mode -->
+    <div id="fps-hint" class="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 glass-panel px-6 py-2.5 rounded-full border-indigo-500/40 text-xs font-semibold text-slate-200 pointer-events-none flex items-center space-x-2 animate-bounce shadow-xl">
+        <i class="fa-solid fa-mouse text-indigo-400 text-sm"></i>
+        <span>Nhấp chuột vào màn hình để xoay góc nhìn 360° (WASD / Mũi tên để di chuyển)</span>
+    </div>
+
+    <!-- Mobile Virtual Joystick Zone -->
+    <div id="joystick-zone" class="absolute bottom-8 left-8 z-10 w-36 h-36 rounded-full bg-slate-900/40 border-2 border-indigo-500/30 backdrop-blur-sm hidden items-center justify-center touch-none select-none">
+        <div id="joystick-knob" class="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-500 border-2 border-white/80 shadow-lg shadow-indigo-500/50 transform transition-transform duration-75"></div>
+    </div>
+
+    <!-- Mobile Action Buttons (Jump) -->
+    <div id="mobile-actions" class="absolute bottom-8 right-8 z-10 hidden flex-col space-y-3 touch-none">
+        <button id="btn-jump-mobile" class="w-16 h-16 rounded-full bg-gradient-to-tr from-pink-600 to-rose-500 border-2 border-white/80 text-white font-orbitron font-bold shadow-lg shadow-rose-500/40 flex items-center justify-center active:scale-90 transition-transform">
+            <i class="fa-solid fa-arrow-up text-xl"></i>
+        </button>
+    </div>
+
+    <!-- Custom Map Editor Modal -->
+    <div id="editor-modal" class="fixed inset-0 z-40 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-4xl max-h-[92vh] rounded-3xl p-6 flex flex-col border-cyan-500/30 shadow-2xl">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/40">
+                        <i class="fa-solid fa-pen-ruler text-lg"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-orbitron font-bold text-white">CHẾ ĐỘ TỰ VẼ BẢN ĐỒ</h2>
+                        <p class="text-xs text-slate-400">Tự tạo mê cung theo ý muốn. <span class="text-rose-400 font-bold">Bắt buộc phải đặt điểm KẾT THÚC!</span></p>
+                    </div>
+                </div>
+                <button id="btn-close-editor" class="text-slate-400 hover:text-white p-2 text-xl transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Toolbar Tools -->
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+                <div class="flex items-center space-x-2">
+                    <button data-tool="wall" class="tool-btn active px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white border border-indigo-400 shadow-md">
+                        <i class="fa-solid fa-square mr-1"></i> Tường
+                    </button>
+                    <button data-tool="path" class="tool-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">
+                        <i class="fa-solid fa-border-none mr-1"></i> Đường đi
+                    </button>
+                    <button data-tool="start" class="tool-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-emerald-400 border border-slate-700 hover:bg-slate-700">
+                        <i class="fa-solid fa-play mr-1"></i> Điểm Bắt Đầu
+                    </button>
+                    <button data-tool="finish" class="tool-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-rose-400 border border-slate-700 hover:bg-slate-700">
+                        <i class="fa-solid fa-flag-checkered mr-1"></i> Điểm Kết Thúc (Bắt buộc)
+                    </button>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <button id="btn-editor-clear" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">
+                        <i class="fa-solid fa-eraser mr-1"></i> Xóa sạch
+                    </button>
+                    <button id="btn-editor-generate" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/30 hover:opacity-90">
+                        <i class="fa-solid fa-play mr-1"></i> Áp Dụng & Chơi
+                    </button>
+                </div>
+            </div>
+
+            <!-- Grid Canvas Container -->
+            <div class="flex-1 overflow-auto flex items-center justify-center bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                <canvas id="editor-canvas" class="cursor-pointer rounded-lg shadow-inner border border-slate-700/50"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-40 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-md rounded-3xl p-6 flex flex-col border-indigo-500/30 shadow-2xl">
+            <div class="flex justify-between items-center mb-6 pb-3 border-b border-slate-800">
+                <h2 class="text-lg font-orbitron font-bold text-white flex items-center">
+                    <i class="fa-solid fa-sliders text-indigo-400 mr-2"></i> CÀI ĐẶT TRÒ CHƠI
+                </h2>
+                <button id="btn-close-settings" class="text-slate-400 hover:text-white text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-5">
+                <!-- Map Size Setting -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase mb-2">Kích thước bản đồ (AI Generator)</label>
+                    <select id="setting-map-size" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:border-indigo-500 focus:outline-none">
+                        <option value="15">Nhỏ (15 x 15)</option>
+                        <option value="25" selected>Vừa (25 x 25)</option>
+                        <option value="35">Lớn (35 x 35)</option>
+                        <option value="51">Siêu Rộng (51 x 51)</option>
+                    </select>
+                </div>
+
+                <!-- Radar Setting -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase mb-2">Chế độ Radar (Bản đồ thu nhỏ)</label>
+                    <select id="setting-radar" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:border-indigo-500 focus:outline-none">
+                        <option value="off" selected>Tắt Radar (Mặc định - Tăng độ khó)</option>
+                        <option value="circle">Rada Tròn (Chỉ báo Quái vật)</option>
+                        <option value="full">Bản đồ Toàn bộ (Đường đi & Tường)</option>
+                    </select>
+                </div>
+
+                <!-- Monsters Setting -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase mb-2">Số lượng Quái vật Săn đuổi</label>
+                    <select id="setting-monsters" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:border-indigo-500 focus:outline-none">
+                        <option value="0" selected>Không có (Mặc định)</option>
+                        <option value="2">Dễ (2 Quái vật)</option>
+                        <option value="5">Trung bình (5 Quái vật)</option>
+                        <option value="10">Ác mộng (10 Quái vật)</option>
+                    </select>
+                </div>
+
+                <div class="pt-4 border-t border-slate-800 flex justify-end space-x-3">
+                    <button id="btn-save-settings" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-orbitron font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all">
+                        LƯU & TẠO BẢN ĐỒ MỚI
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game End Modal (Win / Lose) -->
+    <div id="end-modal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-sm rounded-3xl p-6 text-center border-emerald-500/40 shadow-2xl animate-scale-up">
+            <div id="end-icon-container" class="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto mb-4 text-4xl">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <h2 id="end-title" class="text-2xl font-orbitron font-black text-white mb-2">CHIẾN THẮNG!</h2>
+            <p id="end-desc" class="text-xs text-slate-300 mb-6">Bạn đã thoát khỏi mê cung 3D thành công!</p>
+            <button id="btn-restart" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-orbitron font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all">
+                CHƠI VÁN MỚI
+            </button>
+        </div>
+    </div>
+
+    <script>
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playClick() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(200, this.ctx.currentTime + 0.05);
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.05);
+            }
+            playStep() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+            playWin() {
+                if (!this.ctx) return;
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime + idx * 0.1);
+                    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.1 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.1);
+                    osc.stop(this.ctx.currentTime + idx * 0.1 + 0.3);
+                });
+            }
+            playHit() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(40, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+        }
+        const sfx = new SoundFX();
+
+        /* STREAMING_CHUNK:Implementing Maze Algorithm and A* Pathfinding... */
+        function generateAIMaze(size) {
+            if (size % 2 === 0) size++;
+            const grid = Array(size).fill(null).map(() => Array(size).fill(1));
+
+            function walk(r, c) {
+                grid[r][c] = 0;
+                const dirs = [[-2,0],[2,0],[0,-2],[0,2]].sort(() => Math.random() - 0.5);
+                for (let [dr, dc] of dirs) {
+                    let nr = r + dr, nc = c + dc;
+                    if (nr > 0 && nr < size - 1 && nc > 0 && nc < size - 1 && grid[nr][nc] === 1) {
+                        grid[r + dr/2][c + dc/2] = 0;
+                        walk(nr, nc);
+                    }
+                }
+            }
+            walk(1, 1);
+            grid[1][1] = 0;
+            grid[size - 2][size - 2] = 0;
+
+            return {
+                grid,
+                size,
+                start: { r: 1, c: 1 },
+                finish: { r: size - 2, c: size - 2 }
+            };
+        }
+
+        // A* Pathfinding Algorithm
+        function findAStarPath(grid, start, finish) {
+            const rows = grid.length;
+            const cols = grid[0].length;
+            const openSet = [];
+            const cameFrom = {};
+            const gScore = {};
+            const fScore = {};
+
+            const key = (p) => `${p.r},${p.c}`;
+            const h = (p1, p2) => Math.abs(p1.r - p2.r) + Math.abs(p1.c - p2.c);
+
+            openSet.push(start);
+            gScore[key(start)] = 0;
+            fScore[key(start)] = h(start, finish);
+
+            while (openSet.length > 0) {
+                openSet.sort((a, b) => (fScore[key(a)] || Infinity) - (fScore[key(b)] || Infinity));
+                const current = openSet.shift();
+
+                if (current.r === finish.r && current.c === finish.c) {
+                    const path = [];
+                    let currKey = key(current);
+                    while (currKey) {
+                        const [r, c] = currKey.split(',').map(Number);
+                        path.unshift({ r, c });
+                        currKey = cameFrom[currKey];
+                    }
+                    return path;
+                }
+
+                const neighbors = [
+                    { r: current.r - 1, c: current.c },
+                    { r: current.r + 1, c: current.c },
+                    { r: current.r, c: current.c - 1 },
+                    { r: current.r, c: current.c + 1 }
+                ];
+
+                for (let neighbor of neighbors) {
+                    if (neighbor.r >= 0 && neighbor.r < rows && neighbor.c >= 0 && neighbor.c < cols) {
+                        if (grid[neighbor.r][neighbor.c] === 1) continue; // Wall
+
+                        const tentativeG = (gScore[key(current)] ?? Infinity) + 1;
+                        if (tentativeG < (gScore[key(neighbor)] ?? Infinity)) {
+                            cameFrom[key(neighbor)] = key(current);
+                            gScore[key(neighbor)] = tentativeG;
+                            fScore[key(neighbor)] = tentativeG + h(neighbor, finish);
+                            if (!openSet.some(p => p.r === neighbor.r && p.c === neighbor.c)) {
+                                openSet.push(neighbor);
+                            }
+                        }
+                    }
+                }
+            }
+            return [];
+        }
+
+        class Game3D {
+            constructor() {
+                this.container = document.getElementById('canvas-container');
+                this.mapSize = 25;
+                this.radarMode = 'off'; // 'off', 'circle', 'full'
+                this.monsterCountSetting = 0;
+
+                this.mazeData = generateAIMaze(this.mapSize);
+                this.playerHP = 100;
+
+                this.isFirstPerson = true;
+                this.isPointerLocked = false;
+                this.keys = { w: false, a: false, s: false, d: false, space: false };
+
+                // Physics & Jump
+                this.playerVelY = 0;
+                this.isGrounded = true;
+                this.gravity = 20;
+                this.jumpForce = 8;
+
+                // Mouse look angles
+                this.pitch = 0;
+                this.yaw = 0;
+
+                // Monsters array
+                this.monsters = [];
+
+                // AI Path Hint meshes
+                this.hintMeshes = [];
+
+                this.initThree();
+                this.buildWorld();
+                this.setupControls();
+            }
+
+            initThree() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x070b19);
+                // Reduced fog density so walls are completely visible
+                this.scene.fog = new THREE.FogExp2(0x070b19, 0.02);
+
+                // Near plane = 0.05 to prevent wall clipping when close to walls
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 100);
+                
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.shadowMap.enabled = true;
+                this.container.appendChild(this.renderer.domElement);
+
+                // Enhanced Lighting for maximum 3D visibility
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+                this.scene.add(ambientLight);
+
+                const dirLight = new THREE.DirectionalLight(0x818cf8, 0.6);
+                dirLight.position.set(20, 40, 20);
+                this.scene.add(dirLight);
+
+                this.playerLight = new THREE.PointLight(0x38bdf8, 2.5, 18);
+                this.scene.add(this.playerLight);
+
+                // Finish Beacon Light
+                this.finishLight = new THREE.PointLight(0x10b981, 3, 20);
+                this.scene.add(this.finishLight);
+            }
+
+            buildWorld() {
+                // Clear existing mesh objects except lights added to scene
+                while (this.scene.children.length > 0) {
+                    this.scene.remove(this.scene.children[0]);
+                }
+
+                const grid = this.mazeData.grid;
+                const size = this.mazeData.size;
+
+                // Re-add Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+                this.scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0x818cf8, 0.6);
+                dirLight.position.set(20, 40, 20);
+                this.scene.add(dirLight);
+                this.scene.add(this.playerLight);
+
+                // Floor with Grid helper effect
+                const floorGeo = new THREE.PlaneGeometry(size * 2, size * 2);
+                const floorMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6, metalness: 0.1 });
+                const floor = new THREE.Mesh(floorGeo, floorMat);
+                floor.rotation.x = -Math.PI / 2;
+                floor.position.set(size, 0, size);
+                this.scene.add(floor);
+
+                const gridHelper = new THREE.GridHelper(size * 2, size, 0x6366f1, 0x1e293b);
+                gridHelper.position.set(size, 0.01, size);
+                this.scene.add(gridHelper);
+
+                // Ceiling
+                const ceilMat = new THREE.MeshStandardMaterial({ color: 0x030712, roughness: 0.9 });
+                const ceil = new THREE.Mesh(floorGeo, ceilMat);
+                ceil.rotation.x = Math.PI / 2;
+                ceil.position.set(size, 3, size);
+                this.scene.add(ceil);
+
+                // Vibrant Wall Geometry & Material
+                const wallGeo = new THREE.BoxGeometry(2, 3, 2);
+                const wallMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x3b82f6, 
+                    emissive: 0x1e1b4b,
+                    roughness: 0.3, 
+                    metalness: 0.3 
+                });
+
+                // Instanced Mesh for Walls (Performance)
+                let wallCount = 0;
+                for (let r = 0; r < size; r++) {
+                    for (let c = 0; c < size; c++) {
+                        if (grid[r][c] === 1) wallCount++;
+                    }
+                }
+
+                const instancedWall = new THREE.InstancedMesh(wallGeo, wallMat, wallCount);
+                const matrix = new THREE.Matrix4();
+                let idx = 0;
+
+                for (let r = 0; r < size; r++) {
+                    for (let c = 0; c < size; c++) {
+                        if (grid[r][c] === 1) {
+                            matrix.setPosition(c * 2 + 1, 1.5, r * 2 + 1);
+                            instancedWall.setMatrixAt(idx++, matrix);
+                        }
+                    }
+                }
+                instancedWall.instanceMatrix.needsUpdate = true;
+                this.scene.add(instancedWall);
+
+                // Player Mesh (visible in 3rd person)
+                const playerGeo = new THREE.SphereGeometry(0.4, 16, 16);
+                const playerMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0ea5e9, emissiveIntensity: 0.5, roughness: 0.2 });
+                this.playerMesh = new THREE.Mesh(playerGeo, playerMat);
+                this.scene.add(this.playerMesh);
+
+                // Player Position Setup
+                const startX = this.mazeData.start.c * 2 + 1;
+                const startZ = this.mazeData.start.r * 2 + 1;
+                this.camera.position.set(startX, 1.2, startZ);
+
+                // Finish Goal Beacon (Glowing Cylinder)
+                const finishX = this.mazeData.finish.c * 2 + 1;
+                const finishZ = this.mazeData.finish.r * 2 + 1;
+                
+                const beaconGeo = new THREE.CylinderGeometry(0.5, 0.5, 3, 16);
+                const beaconMat = new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.8 });
+                const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+                beacon.position.set(finishX, 1.5, finishZ);
+                this.scene.add(beacon);
+
+                this.finishLight.position.set(finishX, 2, finishZ);
+                this.scene.add(this.finishLight);
+
+                // Spawn Monsters
+                this.spawnMonsters();
+            }
+
+            spawnMonsters() {
+                this.monsters = [];
+                if (this.monsterCountSetting <= 0) return;
+
+                const grid = this.mazeData.grid;
+                const size = this.mazeData.size;
+                let spawned = 0;
+
+                const monsterGeo = new THREE.SphereGeometry(0.6, 16, 16);
+                const monsterMat = new THREE.MeshStandardMaterial({ color: 0xe11d48, emissive: 0x9f1239, roughness: 0.3 });
+
+                while (spawned < this.monsterCountSetting) {
+                    let r = Math.floor(Math.random() * size);
+                    let c = Math.floor(Math.random() * size);
+
+                    if (grid[r][c] === 0 && (r !== this.mazeData.start.r || c !== this.mazeData.start.c)) {
+                        const mesh = new THREE.Mesh(monsterGeo, monsterMat);
+                        mesh.position.set(c * 2 + 1, 0.8, r * 2 + 1);
+                        this.scene.add(mesh);
+
+                        this.monsters.push({
+                            mesh,
+                            r, c,
+                            targetR: r, targetC: c,
+                            moveProgress: 0
+                        });
+                        spawned++;
+                    }
+                }
+            }
+
+            setupControls() {
+                // Pointer Lock Mouse Look for PC
+                const canvas = this.renderer.domElement;
+
+                canvas.addEventListener('click', () => {
+                    if (!window.isMobileMode && this.isFirstPerson) {
+                        canvas.requestPointerLock();
+                    }
+                });
+
+                document.addEventListener('pointerlockchange', () => {
+                    this.isPointerLocked = (document.pointerLockElement === canvas);
+                    const hint = document.getElementById('fps-hint');
+                    if (hint) {
+                        if (this.isPointerLocked || !this.isFirstPerson || window.isMobileMode) {
+                            hint.classList.add('hidden');
+                        } else {
+                            hint.classList.remove('hidden');
+                        }
+                    }
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isPointerLocked && this.isFirstPerson) {
+                        const sensitivity = 0.0022;
+                        this.yaw -= e.movementX * sensitivity;
+                        this.pitch -= e.movementY * sensitivity;
+
+                        // Pitch limits (look up/down)
+                        this.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, this.pitch));
+                    }
+                });
+
+                // Keyboard Movement
+                window.addEventListener('keydown', (e) => {
+                    sfx.init();
+                    const key = e.key.toLowerCase();
+                    if (key === 'w' || key === 'arrowup') this.keys.w = true;
+                    if (key === 's' || key === 'arrowdown') this.keys.s = true;
+                    if (key === 'a' || key === 'arrowleft') this.keys.a = true;
+                    if (key === 'd' || key === 'arrowright') this.keys.d = true;
+                    if (e.key === ' ' || e.code === 'Space') {
+                        this.keys.space = true;
+                        this.jump();
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    const key = e.key.toLowerCase();
+                    if (key === 'w' || key === 'arrowup') this.keys.w = false;
+                    if (key === 's' || key === 'arrowdown') this.keys.s = false;
+                    if (key === 'a' || key === 'arrowleft') this.keys.a = false;
+                    if (key === 'd' || key === 'arrowright') this.keys.d = false;
+                    if (e.key === ' ' || e.code === 'Space') this.keys.space = false;
+                });
+
+                window.addEventListener('resize', () => {
+                    if (this.camera && this.renderer) {
+                        this.camera.aspect = window.innerWidth / window.innerHeight;
+                        this.camera.updateProjectionMatrix();
+                        this.renderer.setSize(window.innerWidth, window.innerHeight);
+                    }
+                });
+            }
+
+            jump() {
+                if (this.isGrounded) {
+                    this.playerVelY = this.jumpForce;
+                    this.isGrounded = false;
+                }
+            }
+
+            toggleCamera() {
+                this.isFirstPerson = !this.isFirstPerson;
+                const hint = document.getElementById('fps-hint');
+
+                if (!this.isFirstPerson) {
+                    if (document.exitPointerLock) document.exitPointerLock();
+                    if (hint) hint.classList.add('hidden');
+                } else {
+                    if (!window.isMobileMode && hint) hint.classList.remove('hidden');
+                }
+            }
+
+            showAIHint() {
+                // Remove previous hints
+                this.clearHints();
+
+                const playerR = Math.floor(this.camera.position.z / 2);
+                const playerC = Math.floor(this.camera.position.x / 2);
+
+                const path = findAStarPath(this.mazeData.grid, { r: playerR, c: playerC }, this.mazeData.finish);
+                if (path.length <= 1) return;
+
+                const hintGeo = new THREE.SphereGeometry(0.2, 8, 8);
+                const hintMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+
+                for (let p of path) {
+                    const mesh = new THREE.Mesh(hintGeo, hintMat);
+                    mesh.position.set(p.c * 2 + 1, 0.4, p.r * 2 + 1);
+                    this.scene.add(mesh);
+                    this.hintMeshes.push(mesh);
+                }
+            }
+
+            clearHints() {
+                for (let m of this.hintMeshes) {
+                    this.scene.remove(m);
+                }
+                this.hintMeshes = [];
+            }
+
+            update(delta = 0.016) {
+                // Camera Rotation
+                if (this.isFirstPerson) {
+                    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                    euler.x = this.pitch;
+                    euler.y = this.yaw;
+                    this.camera.quaternion.setFromEuler(euler);
+                } else {
+                    // Overhead Third Person View
+                    const size = this.mazeData.size;
+                    this.camera.position.set(size, size * 1.8, size + 0.1);
+                    this.camera.lookAt(size, 0, size);
+                }
+
+                // Movement Logic
+                const moveSpeed = 4.5 * delta;
+                let forward, right;
+
+                if (this.isFirstPerson) {
+                    forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+                    forward.y = 0; forward.normalize();
+                    right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+                    right.y = 0; right.normalize();
+                } else {
+                    forward = new THREE.Vector3(0, 0, -1);
+                    right = new THREE.Vector3(1, 0, 0);
+                }
+
+                let moveDir = new THREE.Vector3();
+                if (this.keys.w) moveDir.add(forward);
+                if (this.keys.s) moveDir.sub(forward);
+                if (this.keys.d) moveDir.add(right);
+                if (this.keys.a) moveDir.sub(right);
+
+                if (moveDir.lengthSq() > 0) {
+                    moveDir.normalize();
+                    sfx.playStep();
+
+                    const nextPosX = this.camera.position.x + moveDir.x * moveSpeed;
+                    const nextPosZ = this.camera.position.z + moveDir.z * moveSpeed;
+
+                    // Collision Detection with Wall Buffer
+                    if (this.canMoveTo(nextPosX, this.camera.position.z)) {
+                        this.camera.position.x = nextPosX;
+                    }
+                    if (this.canMoveTo(this.camera.position.x, nextPosZ)) {
+                        this.camera.position.z = nextPosZ;
+                    }
+                }
+
+                // Gravity & Jump Physics
+                this.playerVelY -= this.gravity * delta;
+                this.camera.position.y += this.playerVelY * delta;
+
+                if (this.camera.position.y <= 1.2) {
+                    this.camera.position.y = 1.2;
+                    this.playerVelY = 0;
+                    this.isGrounded = true;
+                }
+
+                // Sync player mesh position
+                if (this.playerMesh) {
+                    this.playerMesh.position.copy(this.camera.position);
+                    this.playerMesh.position.y -= 0.4;
+                    this.playerMesh.visible = !this.isFirstPerson;
+                }
+
+                // Update Player Point Light
+                this.playerLight.position.copy(this.camera.position);
+
+                // Update Monsters
+                this.updateMonsters(delta);
+
+                // Check Win Condition
+                const finishX = this.mazeData.finish.c * 2 + 1;
+                const finishZ = this.mazeData.finish.r * 2 + 1;
+                const distToFinish = Math.hypot(this.camera.position.x - finishX, this.camera.position.z - finishZ);
+
+                if (distToFinish < 1.0) {
+                    this.triggerWin();
+                }
+
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            canMoveTo(x, z) {
+                // Wall Buffer Radius = 0.45 to prevent clipping through walls
+                const radius = 0.45;
+                const grid = this.mazeData.grid;
+                const size = this.mazeData.size;
+
+                const checkPoints = [
+                    { x: x + radius, z: z + radius },
+                    { x: x - radius, z: z + radius },
+                    { x: x + radius, z: z - radius },
+                    { x: x - radius, z: z - radius }
+                ];
+
+                for (let p of checkPoints) {
+                    let col = Math.floor(p.x / 2);
+                    let row = Math.floor(p.z / 2);
+
+                    if (row < 0 || row >= size || col < 0 || col >= size) return false;
+                    if (grid[row][col] === 1) return false;
+                }
+                return true;
+            }
+
+            updateMonsters(delta) {
+                const playerX = this.camera.position.x;
+                const playerZ = this.camera.position.z;
+
+                for (let m of this.monsters) {
+                    const distToPlayer = Math.hypot(m.mesh.position.x - playerX, m.mesh.position.z - playerZ);
+                    
+                    // Damage player when close
+                    if (distToPlayer < 0.9) {
+                        this.takeDamage(15);
+                    }
+
+                    // Move monster towards player
+                    const speed = 1.8 * delta;
+                    const dirX = playerX - m.mesh.position.x;
+                    const dirZ = playerZ - m.mesh.position.z;
+                    const len = Math.hypot(dirX, dirZ);
+
+                    if (len > 0.1 && len < 10) {
+                        m.mesh.position.x += (dirX / len) * speed;
+                        m.mesh.position.z += (dirZ / len) * speed;
+                    }
+                }
+            }
+
+            takeDamage(amount) {
+                this.playerHP = Math.max(0, this.playerHP - amount);
+                const hpLabel = document.getElementById('player-hp-label');
+                if (hpLabel) hpLabel.innerHTML = `<i class="fa-solid fa-heart mr-1"></i>${this.playerHP} HP`;
+
+                sfx.playHit();
+
+                const overlay = document.getElementById('damage-overlay');
+                if (overlay) {
+                    overlay.style.opacity = '1';
+                    setTimeout(() => overlay.style.opacity = '0', 200);
+                }
+
+                if (this.playerHP <= 0) {
+                    this.triggerGameOver();
+                }
+            }
+
+            triggerWin() {
+                sfx.playWin();
+                const modal = document.getElementById('end-modal');
+                const title = document.getElementById('end-title');
+                const desc = document.getElementById('end-desc');
+                const icon = document.getElementById('end-icon-container');
+
+                if (title) title.innerText = "CHIẾN THẮNG!";
+                if (desc) desc.innerText = "Bạn đã chinh phục thành công mê cung 3D!";
+                if (icon) icon.className = "w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto mb-4 text-4xl";
+                if (modal) modal.classList.remove('hidden');
+            }
+
+            triggerGameOver() {
+                const modal = document.getElementById('end-modal');
+                const title = document.getElementById('end-title');
+                const desc = document.getElementById('end-desc');
+                const icon = document.getElementById('end-icon-container');
+
+                if (title) title.innerText = "THẤT BẠI!";
+                if (desc) desc.innerText = "Bạn đã bị quái vật hạ gục trong mê cung!";
+                if (icon) icon.className = "w-20 h-20 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center justify-center mx-auto mb-4 text-4xl";
+                if (modal) modal.classList.remove('hidden');
+            }
+
+            reset() {
+                this.playerHP = 100;
+                const hpLabel = document.getElementById('player-hp-label');
+                if (hpLabel) hpLabel.innerHTML = `<i class="fa-solid fa-heart mr-1"></i>100 HP`;
+                
+                this.clearHints();
+                this.buildWorld();
+            }
+        }
+
+        class MapEditor {
+            constructor() {
+                this.canvas = document.getElementById('editor-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.size = 25;
+                this.currentTool = 'wall';
+
+                this.grid = Array(this.size).fill(null).map(() => Array(this.size).fill(0));
+                this.start = { r: 1, c: 1 };
+                this.finish = { r: this.size - 2, c: this.size - 2 };
+
+                this.setupUI();
+            }
+
+            setupUI() {
+                const modal = document.getElementById('editor-modal');
+                const btnOpen = document.getElementById('btn-open-editor');
+                const btnClose = document.getElementById('btn-close-editor');
+
+                if (btnOpen) {
+                    btnOpen.addEventListener('click', () => {
+                        sfx.init(); sfx.playClick();
+                        modal.classList.remove('hidden');
+                        this.initGrid();
+                        this.render();
+                    });
+                }
+
+                if (btnClose) {
+                    btnClose.addEventListener('click', () => {
+                        modal.classList.add('hidden');
+                    });
+                }
+
+                // Tool selections
+                document.querySelectorAll('.tool-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.tool-btn').forEach(b => {
+                            b.className = 'tool-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700';
+                        });
+                        btn.className = 'tool-btn active px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white border border-indigo-400 shadow-md';
+                        this.currentTool = btn.dataset.tool;
+                    });
+                });
+
+                // Canvas Painting
+                let isDrawing = false;
+                this.canvas.addEventListener('mousedown', (e) => { isDrawing = true; this.handleDraw(e); });
+                this.canvas.addEventListener('mousemove', (e) => { if (isDrawing) this.handleDraw(e); });
+                window.addEventListener('mouseup', () => isDrawing = false);
+
+                // Touch support
+                this.canvas.addEventListener('touchstart', (e) => { isDrawing = true; this.handleDraw(e.touches[0]); });
+                this.canvas.addEventListener('touchmove', (e) => { if (isDrawing) this.handleDraw(e.touches[0]); });
+                this.canvas.addEventListener('touchend', () => isDrawing = false);
+
+                const btnClear = document.getElementById('btn-editor-clear');
+                if (btnClear) {
+                    btnClear.addEventListener('click', () => {
+                        this.initGrid();
+                        this.render();
+                    });
+                }
+            }
+
+            initGrid() {
+                this.grid = Array(this.size).fill(null).map(() => Array(this.size).fill(0));
+                // Borders
+                for (let i = 0; i < this.size; i++) {
+                    this.grid[0][i] = 1;
+                    this.grid[this.size - 1][i] = 1;
+                    this.grid[i][0] = 1;
+                    this.grid[i][this.size - 1] = 1;
+                }
+            }
+
+            handleDraw(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const cellPixel = this.canvas.width / this.size;
+                const c = Math.floor((e.clientX - rect.left) / cellPixel);
+                const r = Math.floor((e.clientY - rect.top) / cellPixel);
+
+                if (r <= 0 || r >= this.size - 1 || c <= 0 || c >= this.size - 1) return;
+
+                if (this.currentTool === 'wall') this.grid[r][c] = 1;
+                else if (this.currentTool === 'path') this.grid[r][c] = 0;
+                else if (this.currentTool === 'start') {
+                    this.grid[r][c] = 0;
+                    this.start = { r, c };
+                } else if (this.currentTool === 'finish') {
+                    this.grid[r][c] = 0;
+                    this.finish = { r, c };
+                }
+                this.render();
+            }
+
+            render() {
+                const tileSize = Math.max(12, Math.min(24, Math.floor(600 / this.size)));
+                this.canvas.width = this.size * tileSize;
+                this.canvas.height = this.size * tileSize;
+
+                this.ctx.fillStyle = '#090d16';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Draw Grid lines
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                this.ctx.lineWidth = 1;
+                for (let i = 0; i <= this.size; i++) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(i * tileSize, 0);
+                    this.ctx.lineTo(i * tileSize, this.canvas.height);
+                    this.ctx.stroke();
+
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, i * tileSize);
+                    this.ctx.lineTo(this.canvas.width, i * tileSize);
+                    this.ctx.stroke();
+                }
+
+                for (let r = 0; r < this.size; r++) {
+                    for (let c = 0; c < this.size; c++) {
+                        if (this.grid[r][c] === 1) {
+                            this.ctx.fillStyle = '#0284c7';
+                            this.ctx.fillRect(c * tileSize + 1, r * tileSize + 1, tileSize - 2, tileSize - 2);
+                        }
+                    }
+                }
+
+                // Start
+                this.ctx.fillStyle = '#22c55e';
+                this.ctx.fillRect(this.start.c * tileSize + 1, this.start.r * tileSize + 1, tileSize - 2, tileSize - 2);
+
+                // Finish
+                this.ctx.fillStyle = '#f43f5e';
+                this.ctx.fillRect(this.finish.c * tileSize + 1, this.finish.r * tileSize + 1, tileSize - 2, tileSize - 2);
+            }
+        }
+
+        function renderMinimap(game) {
+            const container = document.getElementById('radar-container');
+            if (game.radarMode === 'off') {
+                if (container) container.classList.add('hidden');
+                return;
+            } else {
+                if (container) container.classList.remove('hidden');
+            }
+
+            const canvas = document.getElementById('minimap-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const size = game.mazeData.size;
+            const tileSize = canvas.width / size;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (game.radarMode === 'full') {
+                // Full map rendering
+                for (let r = 0; r < size; r++) {
+                    for (let c = 0; c < size; c++) {
+                        if (game.mazeData.grid[r][c] === 1) {
+                            ctx.fillStyle = '#38bdf8';
+                            ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
+                        }
+                    }
+                }
+                // Finish Goal
+                ctx.fillStyle = '#10b981';
+                ctx.fillRect(game.mazeData.finish.c * tileSize, game.mazeData.finish.r * tileSize, tileSize, tileSize);
+            } else if (game.radarMode === 'circle') {
+                // Circle Radar Mode
+                ctx.strokeStyle = '#6366f1';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2 - 4, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Player Blip
+            const playerC = game.camera.position.x / 2;
+            const playerR = game.camera.position.z / 2;
+            ctx.fillStyle = '#a855f7';
+            ctx.beginPath();
+            ctx.arc(playerC * tileSize, playerR * tileSize, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Monsters Blips
+            ctx.fillStyle = '#f43f5e';
+            for (let m of game.monsters) {
+                const mc = m.mesh.position.x / 2;
+                const mr = m.mesh.position.z / 2;
+                ctx.beginPath();
+                ctx.arc(mc * tileSize, mr * tileSize, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Auto-detect mobile devices based on screen width, touch support, and User-Agent
+        function detectIsMobileDevice() {
+            const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            const isSmallScreen = window.innerWidth < 768;
+            const isMobileUA = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            return (hasTouch && isSmallScreen) || isMobileUA || isSmallScreen;
+        }
+
+        window.isMobileMode = detectIsMobileDevice();
+
+        function initGameApp() {
+            if (window.gameAppStarted) return;
+            window.gameAppStarted = true;
+
+            const game = new Game3D();
+            const editor = new MapEditor();
+
+            // Dynamic Window Resize Listener for auto device detection
+            window.addEventListener('resize', () => {
+                const autoDetected = detectIsMobileDevice();
+                if (window.isMobileMode !== autoDetected) {
+                    window.isMobileMode = autoDetected;
+                    updateDeviceModeUI();
+                }
+            });
+
+            // UI updates for Device Mode (Mobile / PC)
+            function updateDeviceModeUI() {
+                const joystick = document.getElementById('joystick-zone');
+                const actions = document.getElementById('mobile-actions');
+                const hint = document.getElementById('fps-hint');
+
+                if (window.isMobileMode) {
+                    if (joystick) { joystick.classList.remove('hidden'); joystick.classList.add('flex'); }
+                    if (actions) { actions.classList.remove('hidden'); actions.classList.add('flex'); }
+                    if (hint) hint.classList.add('hidden');
+                    if (document.exitPointerLock) document.exitPointerLock();
+                } else {
+                    if (joystick) { joystick.classList.add('hidden'); joystick.classList.remove('flex'); }
+                    if (actions) { actions.classList.add('hidden'); actions.classList.remove('flex'); }
+                    if (hint && !game.isPointerLocked && game.isFirstPerson) hint.classList.remove('hidden');
+                }
+            }
+            updateDeviceModeUI();
+
+            // Default Radar to Full Map mode so walls/map are instantly seen
+            game.radarMode = 'full';
+
+            // Radar Toggle Button
+            const btnRadarToggle = document.getElementById('btn-radar-toggle');
+            if (btnRadarToggle) {
+                btnRadarToggle.addEventListener('click', () => {
+                    sfx.init(); sfx.playClick();
+                    if (game.radarMode === 'off') game.radarMode = 'circle';
+                    else if (game.radarMode === 'circle') game.radarMode = 'full';
+                    else game.radarMode = 'off';
+
+                    const icon = document.getElementById('radar-icon');
+                    if (icon) {
+                        if (game.radarMode === 'off') icon.className = 'fa-solid fa-eye-slash text-sm';
+                        else if (game.radarMode === 'circle') icon.className = 'fa-solid fa-compass text-sm';
+                        else icon.className = 'fa-solid fa-map text-sm';
+                    }
+                });
+            }
+
+            // Camera Toggle Button
+            const btnCamera = document.getElementById('btn-camera');
+            if (btnCamera) {
+                btnCamera.addEventListener('click', () => {
+                    sfx.init(); sfx.playClick();
+                    game.toggleCamera();
+                });
+            }
+
+            // Fullscreen Button
+            const btnFullscreen = document.getElementById('btn-fullscreen');
+            if (btnFullscreen) {
+                btnFullscreen.addEventListener('click', async () => {
+                    sfx.init(); sfx.playClick();
+                    if (!document.fullscreenElement) {
+                        if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+                    } else {
+                        if (document.exitFullscreen) await document.exitFullscreen();
+                    }
+                });
+            }
+
+            // AI Solve Hint Button
+            const btnAiSolve = document.getElementById('btn-ai-solve');
+            if (btnAiSolve) {
+                btnAiSolve.addEventListener('click', () => {
+                    sfx.init(); sfx.playClick();
+                    game.showAIHint();
+                });
+            }
+
+            // Settings Modal logic
+            const settingsModal = document.getElementById('settings-modal');
+            const btnOpenSettings = document.getElementById('btn-open-settings');
+            const btnCloseSettings = document.getElementById('btn-close-settings');
+            const btnSaveSettings = document.getElementById('btn-save-settings');
+
+            if (btnOpenSettings) {
+                btnOpenSettings.addEventListener('click', () => {
+                    sfx.init(); sfx.playClick();
+                    settingsModal.classList.remove('hidden');
+                });
+            }
+            if (btnCloseSettings) {
+                btnCloseSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
+            }
+
+            if (btnSaveSettings) {
+                btnSaveSettings.addEventListener('click', () => {
+                    sfx.init(); sfx.playClick();
+                    const sizeSel = document.getElementById('setting-map-size');
+                    const radarSel = document.getElementById('setting-radar');
+                    const monsterSel = document.getElementById('setting-monsters');
+
+                    if (sizeSel) game.mapSize = parseInt(sizeSel.value);
+                    if (radarSel) game.radarMode = radarSel.value;
+                    if (monsterSel) game.monsterCountSetting = parseInt(monsterSel.value);
+
+                    const mapLabel = document.getElementById('map-size-label');
+                    if (mapLabel) mapLabel.innerHTML = `<i class="fa-solid fa-border-all mr-1 text-indigo-400"></i>${game.mapSize}x${game.mapSize}`;
+
+                    game.mazeData = generateAIMaze(game.mapSize);
+                    game.reset();
+
+                    settingsModal.classList.add('hidden');
+                });
+            }
+
+            // Editor apply button
+            const btnEditorGen = document.getElementById('btn-editor-generate');
+            if (btnEditorGen) {
+                btnEditorGen.addEventListener('click', () => {
+                    sfx.init(); sfx.playClick();
+                    game.mazeData = {
+                        grid: editor.grid,
+                        size: editor.size,
+                        start: editor.start,
+                        finish: editor.finish
+                    };
+                    game.reset();
+                    document.getElementById('editor-modal').classList.add('hidden');
+                });
+            }
+
+            // Game Restart
+            const btnRestart = document.getElementById('btn-restart');
+            if (btnRestart) {
+                btnRestart.addEventListener('click', () => {
+                    sfx.init(); sfx.playClick();
+                    document.getElementById('end-modal').classList.add('hidden');
+                    game.mazeData = generateAIMaze(game.mapSize);
+                    game.reset();
+                });
+            }
+
+            // Touch Virtual Joystick
+            const joystickZone = document.getElementById('joystick-zone');
+            const joystickKnob = document.getElementById('joystick-knob');
+
+            if (joystickZone) {
+                const handleJoystickTouch = (e) => {
+                    if (!window.isMobileMode) return;
+                    e.preventDefault();
+
+                    if (e.type === 'touchend' || e.type === 'touchcancel') {
+                        if (joystickKnob) joystickKnob.style.transform = `translate(0px, 0px)`;
+                        game.keys.w = false; game.keys.s = false;
+                        game.keys.a = false; game.keys.d = false;
+                        return;
+                    }
+
+                    const touch = e.changedTouches[0];
+                    if (!touch) return;
+
+                    const rect = joystickZone.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+
+                    let dx = touch.clientX - centerX;
+                    let dy = touch.clientY - centerY;
+
+                    const maxRadius = rect.width / 2 - 20;
+                    const dist = Math.hypot(dx, dy);
+
+                    if (dist > maxRadius) {
+                        dx = (dx / dist) * maxRadius;
+                        dy = (dy / dist) * maxRadius;
+                    }
+
+                    if (joystickKnob) joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+
+                    const jx = dx / maxRadius;
+                    const jy = dy / maxRadius;
+
+                    const threshold = 0.2;
+                    game.keys.w = jy < -threshold;
+                    game.keys.s = jy > threshold;
+                    game.keys.a = jx < -threshold;
+                    game.keys.d = jx > threshold;
+                };
+
+                joystickZone.addEventListener('touchstart', handleJoystickTouch, { passive: false });
+                joystickZone.addEventListener('touchmove', handleJoystickTouch, { passive: false });
+                joystickZone.addEventListener('touchend', handleJoystickTouch, { passive: false });
+                joystickZone.addEventListener('touchcancel', handleJoystickTouch, { passive: false });
+            }
+
+            // Mobile Jump Button
+            const jumpBtn = document.getElementById('btn-jump-mobile');
+            if (jumpBtn) {
+                jumpBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    game.jump();
+                }, { passive: false });
+            }
+
+            // Main Animation Render Loop
+            function animate() {
+                requestAnimationFrame(animate);
+                game.update();
+                renderMinimap(game);
+            }
+            animate();
+        }
+
+        // Safe Auto Initialization
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTimeout(initGameApp, 50);
+        } else {
+            document.addEventListener('DOMContentLoaded', initGameApp);
+            window.addEventListener('load', initGameApp);
+        }
+    </script>
+</body>
+</html>
